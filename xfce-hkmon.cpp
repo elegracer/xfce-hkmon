@@ -39,7 +39,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#define APP_VERSION "2.1"
+#define APP_VERSION "2.2"
 
 #define VA_STR(x) dynamic_cast<std::ostringstream const&>(std::ostringstream().flush() << x).str()
 
@@ -624,16 +624,34 @@ int main(int argc, char** argv)
                 if (speed > 0) reportDetail << " - " << Network::Bandwidth { netSpeedUnit, speed };
                 reportDetail << " \n";
                 if (isSelectedInterface)
-                    reportStd << std::setw(6) << Network::Bandwidth { netSpeedUnit, speed } << " " << icon
+                    reportStd << icon << " "  << std::setw(6) << Network::Bandwidth { netSpeedUnit, speed }
                               << (singleLine? " " : " \n");
             };
 
             reportDetail << " " << itn->first << ": ";
-            if (isSelectedInterface) reportDetail << "\u2713"; // "check mark" character
+            if (isSelectedInterface) reportDetail << "\uf62b"; // "check mark" character
             reportDetail << "\n";
-            dumpNet("\u25B3", "\u25B2", nif.bytesSent, oif.bytesSent); // white/black up pointing triangles
-            dumpNet("\u25BD", "\u25BC", nif.bytesRecv, oif.bytesRecv); // down pointing triangles
+            dumpNet("\uf55c", "\uf062", nif.bytesSent, oif.bytesSent); // up
+            dumpNet("\uf544", "\uf063", nif.bytesRecv, oif.bytesRecv); // down
         }
+    }
+
+    if (new_Memory) // RAM report
+    {
+        if (new_CPU && (!posTemp || (posRam < posTemp)))
+            reportStd << "\uf2db " << new_Memory->ram.available/1024 << " MB" << (singleLine? " " : "\n");
+
+            reportDetail << " Memory \ufb19 " << new_Memory->ram.total/1024 << " MiB:\n"
+            << Padded<uint64_t> { 1000000, new_Memory->ram.available/1024 } << " MiB available \n"
+            << Padded<uint64_t> { 1000000, (new_Memory->ram.cached+new_Memory->ram.buffers)/1024 }
+            << " MiB cache/buff \n";
+
+        if (new_Memory->ram.shared)
+            reportDetail << Padded<uint64_t> { 1000000, new_Memory->ram.shared/1024 } << " MiB shared \n";
+
+        if (new_Memory->ram.swapTotal)
+            reportDetail << Padded<uint64_t> { 1000000, (new_Memory->ram.swapTotal-new_Memory->ram.swapFree)/1024 }
+                         << " MiB swap of " << new_Memory->ram.swapTotal/1024 << " \n";
     }
 
     if (new_CPU && old_CPU) // CPU report
@@ -674,9 +692,10 @@ int main(int argc, char** argv)
                                  << "  (" << 100.0 * user_hz__sinceBoot / cpuTotalSinceBoot << "%) \n";
                 };
 
-                reportStd << std::setw(6) << std::fixed << std::setprecision(1) << usagePercent << "%";
+                reportStd << "\uf85a" << std::setw(6) << std::fixed << std::setprecision(1) << usagePercent << "%"
+                << (singleLine? " " : "\n");
 
-                reportDetail << " CPU \u2699 " << std::fixed << std::setprecision(2) << usagePercent << "% \u2248 ";
+                reportDetail << " CPU \uf85a " << std::fixed << std::setprecision(2) << usagePercent << "% \u2248 ";
 
                 if (cum_weighted_ghz < 1)
                     reportDetail << uint64_t(cum_weighted_ghz * 1000) << " MHz:\n" << std::setprecision(2);
@@ -706,24 +725,6 @@ int main(int argc, char** argv)
         }
     }
 
-    if (new_Memory) // RAM report
-    {
-        if (new_CPU && (!posTemp || (posRam < posTemp)))
-            reportStd << " " << new_Memory->ram.available/1024 << "M" << (singleLine? " " : "\n");
-
-        reportDetail << " Memory " << new_Memory->ram.total/1024 << " MiB:\n"
-            << Padded<uint64_t> { 1000000, new_Memory->ram.available/1024 } << " MiB available \n"
-            << Padded<uint64_t> { 1000000, (new_Memory->ram.cached+new_Memory->ram.buffers)/1024 }
-            << " MiB cache/buff \n";
-
-        if (new_Memory->ram.shared)
-            reportDetail << Padded<uint64_t> { 1000000, new_Memory->ram.shared/1024 } << " MiB shared \n";
-
-        if (new_Memory->ram.swapTotal)
-            reportDetail << Padded<uint64_t> { 1000000, (new_Memory->ram.swapTotal-new_Memory->ram.swapFree)/1024 }
-                         << " MiB swap of " << new_Memory->ram.swapTotal/1024 << " \n";
-    }
-
     if (new_IO && old_IO && nsecsElapsed) // IO report
     {
         for (auto nitd = new_IO->devices.cbegin(); nitd != new_IO->devices.cend(); ++nitd)
@@ -732,7 +733,7 @@ int main(int argc, char** argv)
             auto prevdev = old_IO->devices.find(nitd->first);
             if ((device.bytesRead || device.bytesWritten) && (prevdev != old_IO->devices.end()))
             {
-                reportDetail << " " << nitd->first << " \u26C1 " << DataSize { device.bytesSize } << ":\n";
+                reportDetail << " " << nitd->first << " \uf1c0 " << DataSize { device.bytesSize } << ":\n";
 
                 auto dumpIO = [&](const char* iconIdle, const char* iconBusy, uint64_t newBytes, uint64_t oldBytes)
                 {
@@ -742,8 +743,8 @@ int main(int argc, char** argv)
                     reportDetail << " \n";
                 };
 
-                dumpIO("\u25B3", "\u25B2", device.bytesWritten, prevdev->second.bytesWritten);
-                dumpIO("\u25BD", "\u25BC", device.bytesRead, prevdev->second.bytesRead);
+                dumpIO("\uf55c", "\uf062", device.bytesWritten, prevdev->second.bytesWritten);
+                dumpIO("\uf544", "\uf063", device.bytesRead, prevdev->second.bytesRead);
             }
         }
     }
@@ -785,18 +786,18 @@ int main(int argc, char** argv)
         }
 
         if (new_CPU && (maxAbsTemp >= 0) && (!posRam || (posTemp < posRam)))
-            reportStd << std::setw(4) << maxAbsTemp / 1000 << "ºC" << (singleLine? " " : "\n");
+            reportStd << " \uf8c7 : " << std::setw(4) << maxAbsTemp / 1000 << "ºC" << (singleLine? " " : "\n");
 
-        if (!statByCategory.empty()) reportDetail << " Temperature: \n";
+        if (!statByCategory.empty()) reportDetail << " Temperature \uf8c7 : \n";
 
         for (auto its = statByCategory.crbegin(); its != statByCategory.crend(); ++its)
         {
             if (its->second.count == 1)
                 reportDetail << "    " << its->second.firstName << ": " << its->second.max / 1000 << "ºC \n";
             else
-                reportDetail << "    \u2206" << its->second.max / 1000
-                             << "ºC  \u2207" << its->second.min / 1000
-                             << "ºC  \u222B" << its->second.avg / 1000
+                reportDetail << "    \uf106" << its->second.max / 1000
+                             << "ºC  \uf107" << its->second.min / 1000
+                             << "ºC  \u222b" << its->second.avg / 1000
                              << "ºC  (" << its->second.count << " " << its->first << ") \n";
         }
     }
